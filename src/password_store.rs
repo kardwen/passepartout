@@ -14,22 +14,16 @@ use crate::{error::PasswordError, events::PasswordEvent, password_info::Password
 
 static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
 
-pub fn get_clipboard() -> &'static Mutex<Option<Clipboard>> {
+pub fn copy_id(pass_id: String) -> Result<(), PasswordError> {
     let mut clipboard = CLIPBOARD
         .lock()
         .expect("another thread holding the lock paniced");
+
     if clipboard.is_none() {
         *clipboard = Clipboard::new().ok();
     }
-    &CLIPBOARD
-}
 
-pub fn copy_id(pass_id: String) -> Result<(), PasswordError> {
-    let mut clipboard_guard = get_clipboard()
-        .lock()
-        .expect("another thread holding the lock paniced");
-
-    match clipboard_guard.as_mut() {
+    match clipboard.as_mut() {
         Some(clipboard) => match clipboard.set_text(pass_id) {
             Ok(()) => Ok(()),
             Err(e) => Err(PasswordError::ClipboardError(e)),
