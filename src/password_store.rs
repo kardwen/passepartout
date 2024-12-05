@@ -1,129 +1,19 @@
-use arboard::Clipboard;
 use std::{
     collections::HashMap,
-    env,
-    ffi::OsStr,
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::{mpsc::Sender, Mutex},
+    sync::mpsc::Sender,
     thread::{self, JoinHandle},
 };
 
-use crate::{error::PasswordError, events::PasswordEvent, password_info::PasswordInfo};
+use crate::{
+    error::PasswordError,
+    events::PasswordEvent,
+    operations::{copy_login, copy_otp, copy_password, fetch_entry, fetch_otp},
+    password_info::PasswordInfo,
+};
 
-static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
-
-pub fn get_clipboard() -> &'static Mutex<Option<Clipboard>> {
-    let mut clipboard = CLIPBOARD
-        .lock()
-        .expect("another thread holding the lock paniced");
-    if clipboard.is_none() {
-        *clipboard = Clipboard::new().ok();
-    }
-    &CLIPBOARD
-}
-
-pub fn copy_id(pass_id: String) -> Result<(), PasswordError> {
-    let mut clipboard_guard = get_clipboard()
-        .lock()
-        .expect("another thread holding the lock paniced");
-
-    match clipboard_guard.as_mut() {
-        Some(clipboard) => match clipboard.set_text(pass_id) {
-            Ok(()) => Ok(()),
-            Err(e) => Err(PasswordError::ClipboardError(e)),
-        },
-        None => Err(PasswordError::ClipboardUnavailable),
-    }
-}
-
-pub fn copy_password(pass_id: String) -> Result<PasswordEvent, PasswordError> {
-    let status = Command::new("pass")
-        .arg(OsStr::new(&pass_id))
-        .arg("--clip")
-        .stderr(Stdio::null())
-        .stdout(Stdio::null())
-        .status()
-        .expect("failed to execute process");
-    if status.success() {
-        let message = "Password copied to clipboard, clears after 45 seconds".to_string();
-        Ok(PasswordEvent::Status(Ok(Some(message))))
-    } else {
-        Err(PasswordError::PassError(status.to_string()))
-    }
-}
-
-pub fn copy_login(pass_id: String) -> Result<PasswordEvent, PasswordError> {
-    let status = Command::new("pass")
-        .arg(OsStr::new(&pass_id))
-        .arg("--clip=2")
-        .stderr(Stdio::null())
-        .stdout(Stdio::null())
-        .status()
-        .expect("failed to execute process");
-    if status.success() {
-        let message = "Login copied to clipboard, clears after 45 seconds".to_string();
-        Ok(PasswordEvent::Status(Ok(Some(message))))
-    } else {
-        Err(PasswordError::PassError(status.to_string()))
-    }
-}
-
-pub fn copy_otp(pass_id: String) -> Result<PasswordEvent, PasswordError> {
-    let status = Command::new("pass")
-        .arg("otp")
-        .arg("code")
-        .arg(OsStr::new(&pass_id))
-        .arg("--clip")
-        .stderr(Stdio::null())
-        .stdout(Stdio::null())
-        .status()
-        .expect("failed to execute process");
-    if status.success() {
-        let message = "One-time password copied to clipboard".to_string();
-        Ok(PasswordEvent::Status(Ok(Some(message))))
-    } else {
-        Err(PasswordError::PassError(status.to_string()))
-    }
-}
-
-pub fn fetch_otp(pass_id: String) -> Result<PasswordEvent, PasswordError> {
-    let output = Command::new("pass")
-        .arg("otp")
-        .arg("code")
-        .arg(OsStr::new(&pass_id))
-        .output()
-        .expect("failed to execute process");
-    if output.status.success() {
-        let one_time_password = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(PasswordEvent::OneTimePassword {
-            pass_id,
-            one_time_password,
-        })
-    } else {
-        let message = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(PasswordError::PassError(message))
-    }
-}
-
-pub fn fetch_entry(pass_id: String) -> Result<PasswordEvent, PasswordError> {
-    let output = Command::new("pass")
-        .arg(OsStr::new(&pass_id))
-        .output()
-        .expect("failed to execute process");
-    if output.status.success() {
-        let file_contents = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(PasswordEvent::PasswordInfo {
-            pass_id,
-            file_contents,
-        })
-    } else {
-        let message = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(PasswordError::PassError(message))
-    }
-}
-
+/// A password store that manages password entries and asynchronous operations.
 pub struct PasswordStore {
     pub passwords: Vec<PasswordInfo>,
     event_tx: Sender<PasswordEvent>,
@@ -131,6 +21,10 @@ pub struct PasswordStore {
 }
 
 impl PasswordStore {
+    /// Creates a new password store instance with loaded password entries.
+    ///
+    /// Initializes the store by reading all password entries from the password store directory,
+    /// sorting them by ID, and setting up the event channel for asynchronous operations.
     pub fn new(event_tx: Sender<PasswordEvent>) -> Self {
         let store_dir = Self::get_store_dir();
         let mut passwords = Self::get_password_infos(&store_dir);
@@ -142,6 +36,7 @@ impl PasswordStore {
         }
     }
 
+    /// Determines the password store directory path.
     pub fn get_store_dir() -> PathBuf {
         let home = dirs::home_dir().expect("could not determine home directory");
         if let Some(store_path) = env::var_os("PASSWORD_STORE_DIR") {
@@ -158,6 +53,10 @@ impl PasswordStore {
         home.join(".password-store")
     }
 
+    /// Collects and processes all password entries from the store directory.
+    ///
+    /// Recursively traverses the store directory to find all `.gpg` files and creates
+    /// [`PasswordInfo`] instances containing metadata for each entry.
     pub fn get_password_infos(store_dir: &Path) -> Vec<PasswordInfo> {
         Self::read_store_dir(store_dir)
             .unwrap_or_default()
@@ -191,8 +90,7 @@ impl PasswordStore {
         Ok(result)
     }
 
-    /// Runs the provided function in a new thread only if an operation
-    /// with the same pass_id is not already running
+    /// Executes a password operation in a new thread if not already running.
     fn run_once(
         &mut self,
         pass_id: String,
@@ -220,27 +118,42 @@ impl PasswordStore {
         self.ops_map.insert(fn_ptr, (handle, last_pass_id));
     }
 
-    /// Runs in a new thread
+    /// Copies the password to the clipboard in a separate thread.
+    ///
+    /// The operation will only be executed if no other copy operation
+    /// is currently running for the same password ID.
     pub fn copy_password(&mut self, pass_id: String) {
         self.run_once(pass_id, copy_password);
     }
 
-    /// Runs in a new thread
+    /// Copies the login information to the clipboard in a separate thread.
+    ///
+    /// The operation will only be executed if no other copy operation
+    /// is currently running for the same password ID.
     pub fn copy_login(&mut self, pass_id: String) {
         self.run_once(pass_id, copy_login);
     }
 
-    /// Runs in a new thread
+    /// Copies the one-time password (OTP) to the clipboard in a separate thread.
+    ///
+    /// The operation will only be executed if no other copy operation
+    /// is currently running for the same password ID.
     pub fn copy_otp(&mut self, pass_id: String) {
         self.run_once(pass_id, copy_otp);
     }
 
-    /// Runs in a new thread
+    /// Retrieves the one-time password (OTP) in a separate thread.
+    ///
+    /// The operation will only be executed if no other fetch operation
+    /// is currently running for the same password ID.
     pub fn fetch_otp(&mut self, pass_id: String) {
         self.run_once(pass_id, fetch_otp);
     }
 
-    /// Runs in a new thread
+    /// Retrieves the password file contents in a separate thread.
+    ///
+    /// The operation will only be executed if no other fetch operation
+    /// is currently running for the same password ID.
     pub fn fetch_entry(&mut self, pass_id: String) {
         self.run_once(pass_id, fetch_entry);
     }

@@ -5,6 +5,7 @@ use icu::{
 };
 use std::{fs::Metadata, path::Path, time::UNIX_EPOCH};
 
+/// Stores the ID and metadata of a password file.
 #[derive(Debug, Clone)]
 pub struct PasswordInfo {
     pub pass_id: String,
