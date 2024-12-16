@@ -5,7 +5,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{error::PasswordError, events::PasswordEvent};
+use crate::{error::PasswordError, event::PasswordEvent};
 
 static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
 

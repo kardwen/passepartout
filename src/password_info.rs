@@ -3,7 +3,7 @@ use icu::{
     datetime::{options::length, TypedDateTimeFormatter},
     locid::locale,
 };
-use std::{fs::Metadata, path::Path, time::UNIX_EPOCH};
+use std::{fs::Metadata, time::UNIX_EPOCH};
 
 /// Stores the ID and metadata of a password file.
 #[derive(Debug, Clone)]
@@ -13,23 +13,8 @@ pub struct PasswordInfo {
 }
 
 impl PasswordInfo {
-    pub fn new(relative_path: &Path, metadata: Metadata) -> Self {
-        PasswordInfo {
-            pass_id: Self::build_pass_id(relative_path),
-            metadata,
-        }
-    }
-
-    fn build_pass_id(relative_path: &Path) -> String {
-        let parent = relative_path
-            .parent()
-            .expect("yields None when passed an empty string");
-        let file_stem = relative_path.file_stem().expect("No file name");
-        parent
-            .join(Path::new(file_stem))
-            .to_str()
-            .expect("Unicode conversion failed")
-            .to_string()
+    pub fn new(pass_id: String, metadata: Metadata) -> Self {
+        PasswordInfo { pass_id, metadata }
     }
 
     pub fn last_modified(&self) -> String {
@@ -41,7 +26,7 @@ impl PasswordInfo {
                         .into();
                 let dtf =
                     TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en").into(), options)
-                        .expect("Failed to create TypedDateTimeFormatter instance.");
+                        .expect("failed to create TypedDateTimeFormatter instance.");
                 // DateTime
                 let datetime =
                     DateTime::from_minutes_since_local_unix_epoch(duration.as_secs() as i32 / 60)

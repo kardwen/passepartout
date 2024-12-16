@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     error::PasswordError,
-    events::PasswordEvent,
+    event::PasswordEvent,
     operations::{copy_login, copy_otp, copy_password, fetch_entry, fetch_otp},
     password_info::PasswordInfo,
 };
@@ -62,9 +62,16 @@ impl PasswordStore {
             .unwrap_or_default()
             .iter()
             .filter_map(|path| {
-                let relative_path = path.strip_prefix(store_dir).expect("prefix does exist");
+                // Get pass ID
+                let pass_id = path
+                    .strip_prefix(store_dir)
+                    .expect("store_dir should be a prefix")
+                    .with_extension("")
+                    .to_string_lossy()
+                    .into();
+
                 match path.metadata() {
-                    Ok(metadata) => Some(PasswordInfo::new(relative_path, metadata)),
+                    Ok(metadata) => Some(PasswordInfo::new(pass_id, metadata)),
                     Err(_) => None,
                 }
             })
@@ -79,7 +86,11 @@ impl PasswordStore {
                 let path = entry?.path();
                 if path.is_dir() {
                     visit_dir(&path, result)?;
-                } else if path.is_file() && path.extension().is_some_and(|ext| ext == "gpg") {
+                } else if path.is_file()
+                    && path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("gpg"))
+                {
                     result.push(path);
                 }
             }
