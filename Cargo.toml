@@ -1,11 +1,11 @@
 [package]
 name = "passepartout"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "Library for pass"
 authors = ["Karl Felix Schewe"]
 readme = "README.md"
-license = "GPL-3.0-only"
+license = "LGPL-2.1"
 repository = "https://github.com/kardwen/passepartout"
 keywords = ["pass"]
 categories = ["authentication", "cryptography"]
@@ -13,5 +13,7 @@ categories = ["authentication", "cryptography"]
 [dependencies]
 arboard = { version = "3.4.1", features = ["wayland-data-control"] }
 dirs = "5.0.1"
+gpgme = "0.11.0"
 icu = "1.5.0"
 thiserror = "2.0.4"
+totp-rs = { version = "5.6.0", features = ["otpauth"] }
