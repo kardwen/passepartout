@@ -8,13 +8,13 @@ use std::{fs::Metadata, time::UNIX_EPOCH};
 /// Stores the ID and metadata of a password file.
 #[derive(Debug, Clone)]
 pub struct PasswordInfo {
-    pub pass_id: String,
+    pub id: String,
     pub metadata: Metadata,
 }
 
 impl PasswordInfo {
-    pub fn new(pass_id: String, metadata: Metadata) -> Self {
-        PasswordInfo { pass_id, metadata }
+    pub fn new(id: String, metadata: Metadata) -> Self {
+        PasswordInfo { id, metadata }
     }
 
     pub fn last_modified(&self) -> String {
@@ -35,9 +35,5 @@ impl PasswordInfo {
             }
         }
         String::from("Unknown")
-    }
-
-    pub fn pass_id(&self) -> String {
-        self.pass_id.clone()
     }
 }

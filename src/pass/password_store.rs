@@ -20,7 +20,7 @@ impl PasswordStore {
     pub fn new() -> Self {
         let store_dir = Self::get_store_dir();
         let mut passwords = Self::get_password_infos(&store_dir);
-        passwords.sort_by_key(|element| element.pass_id.clone());
+        passwords.sort_by_key(|info| info.id.clone());
         Self {
             store_dir,
             passwords,

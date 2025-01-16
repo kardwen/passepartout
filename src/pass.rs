@@ -1,3 +1,4 @@
+mod cryptography;
 mod operations;
 mod password_info;
 mod password_store;
