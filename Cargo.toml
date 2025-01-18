@@ -7,13 +7,21 @@ authors = ["Karl Felix Schewe"]
 readme = "README.md"
 license = "LGPL-2.1"
 repository = "https://github.com/kardwen/passepartout"
-keywords = ["pass"]
+keywords = ["pass", "password-manager", "password-store"]
 categories = ["authentication", "cryptography"]
+
+[features]
+default = ["gpgme"]
+gpgme = ["dep:gpgme"]
+sequoia = ["dep:futures", "dep:sequoia-gpg-agent", "dep:sequoia-openpgp"]
 
 [dependencies]
 arboard = { version = "3.4.1", features = ["wayland-data-control"] }
 dirs = "6.0.0"
-gpgme = "0.11.0"
+futures = { version = "0.3.31", optional = true }
+gpgme = { version = "0.11.0", optional = true }
 icu = "1.5.0"
+sequoia-gpg-agent = { version = "0.5.0", optional = true }
+sequoia-openpgp = { version = "1.22.0", default-features = false, features = ["crypto-nettle", "compression"], optional = true }
 thiserror = "2.0.4"
 totp-rs = { version = "5.6.0", features = ["otpauth"] }

@@ -45,6 +45,20 @@ pub fn copy_login(file_path: &Path) -> Result<(), Error> {
     copy_to_clipboard(login, true)
 }
 
+/// Copies the nth line from a file to the system clipboard, will be cleared after 45 seconds.
+///
+/// This operation is synchronous and will block until decryption completes.
+pub fn copy_line(file_path: &Path, line_num: usize) -> Result<(), Error> {
+    // Decrypt file and extract login on second line
+    let file_contents = decrypt_password_file(file_path)?;
+    let login = file_contents
+        .lines()
+        .nth(line_num - 1)
+        .ok_or_else(|| Error::Pass("no login found".to_string()))?;
+
+    copy_to_clipboard(login, true)
+}
+
 /// Generates and returns a one-time password (OTP).
 ///
 /// This operation is synchronous and will block until decryption completes.
